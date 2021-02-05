@@ -32,13 +32,14 @@ type List struct {
 	hideVerticalSlider       bool
 	allowReselect            bool
 
-	init            *MultiOnce
-	container       *Container
-	scrollContainer *ScrollContainer
-	vSlider         *Slider
-	hSlider         *Slider
-	buttons         []*Button
-	selectedEntry   interface{}
+	init              *MultiOnce
+	container         *Container
+	scrollContainer   *ScrollContainer
+	vSlider           *Slider
+	hSlider           *Slider
+	buttons           []*Button
+	buttonRemoveFuncs []RemoveChildFunc
+	selectedEntry     interface{}
 }
 
 type ListOpt func(l *List)
@@ -245,6 +246,7 @@ func (l *List) createWidget() {
 		ContainerOpts.AutoDisableChildren())
 
 	l.buttons = make([]*Button, 0, len(l.entries))
+	l.buttonRemoveFuncs = make([]RemoveChildFunc, 0, len(l.entries))
 	for _, e := range l.entries {
 		e := e
 		but := NewButton(
@@ -254,12 +256,13 @@ func (l *List) createWidget() {
 			ButtonOpts.Image(l.entryUnselectedColor),
 			ButtonOpts.TextSimpleLeft(l.entryLabelFunc(e), l.entryFace, l.entryUnselectedTextColor, l.entryTextPadding),
 			ButtonOpts.ClickedHandler(func(args *ButtonClickedEventArgs) {
-				l.setSelectedEntry(e, true)
+				buttonNum := l.getButtonNum(args.Button)
+				l.setSelectedEntry(l.entries[buttonNum], true)
 			}))
 
 		l.buttons = append(l.buttons, but)
-
-		content.AddChild(but)
+		removeChildFunc := content.AddChild(but)
+		l.buttonRemoveFuncs = append(l.buttonRemoveFuncs, removeChildFunc)
 	}
 
 	l.scrollContainer = NewScrollContainer(append(l.scrollContainerOpts, []ScrollContainerOpt{
@@ -337,6 +340,96 @@ func (l *List) setSelectedEntry(e interface{}, user bool) {
 			PreviousEntry: prev,
 		})
 	}
+}
+
+func (l *List) ReplaceEntry(currentEntry interface{}, newEntry interface{}) {
+	l.init.Do()
+
+	for i, b := range l.buttons {
+		if l.entries[i] == currentEntry {
+			l.entries[i] = newEntry
+			b.Text().Label = l.entryLabelFunc(newEntry)
+		}
+	}
+	if l.selectedEntry == currentEntry {
+		l.selectedEntry = newEntry
+	}
+}
+
+func (l *List) AddEntry(newEntry interface{}) {
+	l.init.Do()
+
+	l.entries = append(l.entries, newEntry)
+
+	but := NewButton(
+		ButtonOpts.WidgetOpts(WidgetOpts.LayoutData(RowLayoutData{
+			Stretch: true,
+		})),
+		ButtonOpts.Image(l.entryUnselectedColor),
+		ButtonOpts.TextSimpleLeft(l.entryLabelFunc(newEntry), l.entryFace, l.entryUnselectedTextColor, l.entryTextPadding),
+		ButtonOpts.ClickedHandler(func(args *ButtonClickedEventArgs) {
+			buttonNum := l.getButtonNum(args.Button)
+			l.setSelectedEntry(l.entries[buttonNum], true)
+		}))
+
+	l.buttons = append(l.buttons, but)
+	content, ok := l.scrollContainer.content.(*Container)
+	if ok {
+		removeChildFunc := content.AddChild(but)
+		l.buttonRemoveFuncs = append(l.buttonRemoveFuncs, removeChildFunc)
+	}
+}
+
+func (l *List) RemoveEntry(entry interface{}) {
+	l.init.Do()
+
+	n := 0
+	removedEntryNum := -1
+	for _, e := range l.entries {
+		if e != entry {
+			l.entries[n] = e
+			n++
+		} else {
+			l.entries[n] = nil
+			removedEntryNum = n
+		}
+	}
+	l.entries = l.entries[:n]
+
+	if removedEntryNum != -1 {
+		l.buttonRemoveFuncs[removedEntryNum]()
+
+		n = 0
+		for i, b := range l.buttons {
+			if i != removedEntryNum {
+				l.buttons[n] = b
+				n++
+			} else {
+				l.buttons[n] = nil
+			}
+		}
+		l.buttons = l.buttons[:n]
+
+		n = 0
+		for i, f := range l.buttonRemoveFuncs {
+			if i != removedEntryNum {
+				l.buttonRemoveFuncs[n] = f
+				n++
+			} else {
+				l.buttonRemoveFuncs[n] = nil
+			}
+		}
+		l.buttonRemoveFuncs = l.buttonRemoveFuncs[:n]
+	}
+}
+
+func (l *List) getButtonNum(button *Button) int {
+	for i, b := range l.buttons {
+		if b == button {
+			return i
+		}
+	}
+	return -1
 }
 
 func (l *List) SelectedEntry() interface{} {
