@@ -342,6 +342,22 @@ func (l *List) setSelectedEntry(e interface{}, user bool) {
 	}
 }
 
+func (l *List) UpdateEntries(newEntries []interface{}) {
+	l.init.Do()
+
+	for len(l.entries) > len(newEntries) {
+		l.RemoveEntryAt(0)
+	}
+	for i := range l.entries {
+		l.ReplaceEntryAt(i, newEntries[i])
+	}
+	i := len(l.entries)
+	for len(l.entries) < len(newEntries) {
+		l.AddEntry(newEntries[i])
+		i++
+	}
+}
+
 func (l *List) ReplaceEntryAt(replaceIndex int, newEntry interface{}) {
 	l.init.Do()
 
