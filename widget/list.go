@@ -342,6 +342,16 @@ func (l *List) setSelectedEntry(e interface{}, user bool) {
 	}
 }
 
+func (l *List) ReplaceEntryAt(replaceIndex int, newEntry interface{}) {
+	l.init.Do()
+
+	if l.selectedEntry == l.entries[replaceIndex] {
+		l.selectedEntry = newEntry
+	}
+	l.entries[replaceIndex] = newEntry
+	l.buttons[replaceIndex].Text().Label = l.entryLabelFunc(newEntry)
+}
+
 func (l *List) ReplaceEntry(currentEntry interface{}, newEntry interface{}) {
 	l.init.Do()
 
@@ -378,6 +388,13 @@ func (l *List) AddEntry(newEntry interface{}) {
 		removeChildFunc := content.AddChild(but)
 		l.buttonRemoveFuncs = append(l.buttonRemoveFuncs, removeChildFunc)
 	}
+}
+
+func (l *List) RemoveEntryAt(removeIndex int) {
+	l.init.Do()
+
+	e := l.entries[removeIndex]
+	l.RemoveEntry(e)
 }
 
 func (l *List) RemoveEntry(entry interface{}) {
